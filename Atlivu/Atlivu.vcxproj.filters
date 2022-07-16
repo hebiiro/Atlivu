@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="リソース ファイル">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="ベース">
+      <UniqueIdentifier>{ed9f4a5c-9a70-492c-9e4b-29c7870f5956}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="targetver.h">
+      <Filter>ベース</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>ベース</Filter>
+    </ClInclude>
+    <ClInclude Include="framework.h">
+      <Filter>ベース</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>リソース ファイル</Filter>
+    </ClInclude>
+    <ClInclude Include="MainView.h" />
+    <ClInclude Include="Atlivu.h" />
+    <ClInclude Include="MainFrame.h" />
+    <ClInclude Include="VideoProcessor.h" />
+    <ClInclude Include="VideoProcessorWindow.h" />
+    <ClInclude Include="Common.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <Filter>ベース</Filter>
+    </ClCompile>
+    <ClCompile Include="MainView.cpp" />
+    <ClCompile Include="MainFrame.cpp" />
+    <ClCompile Include="Atlivu.cpp" />
+    <ClCompile Include="VideoProcessor.cpp" />
+    <ClCompile Include="VideoProcessorWindow.cpp" />
+    <ClCompile Include="Atlivu_Audio.cpp" />
+    <ClCompile Include="Atlivu_Raw.cpp" />
+    <ClCompile Include="Atlivu_Video.cpp" />
+    <ClCompile Include="Atlivu_Save.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Atlivu.rc">
+      <Filter>リソース ファイル</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\userimages.bmp">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="res\Atlivu.ico">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="res\Toolbar.bmp">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="res\Toolbar256.bmp">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\Atlivu.rc2">
+      <Filter>リソース ファイル</Filter>
+    </None>
+  </ItemGroup>
+</Project>
