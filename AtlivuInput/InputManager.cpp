@@ -66,7 +66,12 @@ Media::Media(LPCTSTR fileName)
 	// メディアを開く。
 	m_fileName = fileName;
 	MY_TRACE_TSTR((LPCTSTR)fileName);
-	m_inputHandle = getInputManager()->getInputPlugin()->func_open((_bstr_t)(LPCTSTR)m_fileName);
+
+	_bstr_t fileNameBSTR = m_fileName;
+
+	::MessageBoxA(0, fileNameBSTR, "AtlivuInput", MB_OK);
+
+	m_inputHandle = getInputManager()->getInputPlugin()->func_open(fileNameBSTR);
 	MY_TRACE_HEX(m_inputHandle);
 
 	if (!m_inputHandle)

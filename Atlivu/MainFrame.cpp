@@ -11,7 +11,7 @@
 BEGIN_MESSAGE_MAP(CMainFrame, CWnd)
 	ON_WM_CREATE()
 	ON_WM_DESTROY()
-	ON_REGISTERED_MESSAGE(AFX_WM_DRAW2D, &CMainFrame::OnDraw2D)
+	ON_WM_PAINT()
 	ON_MESSAGE(WM_ATLIVU_INPUT_INITED, OnAtlivuInputInited)
 	ON_MESSAGE(WM_ATLIVU_OUTPUT_INITED, OnAtlivuOutputInited)
 	ON_COMMAND(ID_OPEN_MEDIA, OnOpenMedia)
@@ -40,6 +40,48 @@ CMainFrame::CMainFrame() noexcept
 
 CMainFrame::~CMainFrame()
 {
+}
+
+BOOL CMainFrame::setupPixelFormat(CDC& dc)
+{
+	PIXELFORMATDESCRIPTOR pfd =
+	{
+		sizeof(pfd),
+		1,
+		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+		PFD_TYPE_RGBA,
+		24,
+		0, 0, 0, 0, 0, 0,
+		0,
+		0,
+		0,
+		0, 0, 0, 0,
+		32,
+		0,
+		0,
+		PFD_MAIN_PLANE,
+		0,
+		0, 0, 0
+	};
+
+	int pixelFormat = ::ChoosePixelFormat(dc, &pfd);
+	MY_TRACE_INT(pixelFormat);
+
+	if (!pixelFormat)
+	{
+		MY_TRACE(_T("::ChoosePixelFormat() が失敗しました\n"));
+
+		return FALSE;
+	}
+
+	if (!::SetPixelFormat(dc, pixelFormat, &pfd))
+	{
+		MY_TRACE(_T("::SetPixelFormat() が失敗しました\n"));
+
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 BOOL CMainFrame::Create()
@@ -80,6 +122,22 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	if (CWnd::OnCreate(lpCreateStruct) == -1)
 		return -1;
 
+	{
+		CClientDC dc(this);
+
+		setupPixelFormat(dc);
+
+		m_rc = ::wglCreateContext(dc);
+		MY_TRACE_HEX(m_rc);
+
+		if (!m_rc)
+		{
+			MY_TRACE(_T("::wglCreateContext() が失敗しました\n"));
+
+			return -1;
+		}
+	}
+
 	if (!theApp.createInputProcess())
 		return -1;
 
@@ -97,183 +155,15 @@ void CMainFrame::OnDestroy()
 {
 	theApp.stop();
 
+	if (m_rc)
+		::wglDeleteContext(m_rc);
+
 	CWnd::OnDestroy();
 }
 
-LRESULT CMainFrame::OnDraw2D(WPARAM wParam, LPARAM lParam)
+void CMainFrame::OnPaint()
 {
-	CHwndRenderTarget* renderTarget = (CHwndRenderTarget*)lParam;
-
-	CRect rc; GetClientRect(&rc);
-
-	D2D1_ANTIALIAS_MODE mode0 = renderTarget->GetAntialiasMode();
-	D2D1_TEXT_ANTIALIAS_MODE mode1 = renderTarget->GetTextAntialiasMode();
-//	CD2DSizeF dpi = renderTarget->GetDpi();
-//	renderTarget->SetDpi(CSize(96, 96));
-//	renderTarget->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-//	renderTarget->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_ALIASED);
-
-	renderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-//	renderTarget->SetTransform(D2D1::Matrix3x2F::Translation(0.5f, 0.5f));
-
-	CD2DLayer layer(renderTarget);
-	renderTarget->PushLayer(D2D1::LayerParameters(CD2DRectF(rc)), layer);
-
-	{
-		CD2DSolidColorBrush brush(renderTarget, RGB(0x33, 0x33, 0x33));
-		renderTarget->FillRectangle(rc, &brush);
-	}
-
-	double zoom = 1.0;
-	int guageWidth = 150;
-	int guageHeight = 40;
-	int shortGuageHeight = 10;
-	int longGuageHeight = 20;
-	int layerButtonWidth = 100;
-	int layerButtonHeight = 40;
-
-	CD2DTextFormat textFormat(renderTarget, _T("Segoe UI"), (FLOAT)(guageHeight - longGuageHeight));
-	CD2DSolidColorBrush textBrush(renderTarget, RGB(0xff, 0xff, 0xff));
-
-	{
-		CRect rcBase = rc;
-		rcBase.left += layerButtonWidth;
-		rcBase.bottom = rcBase.top + guageHeight;
-		int baseWidth = rcBase.Width();
-		int baseHeight = rcBase.Height();
-
-		CD2DSolidColorBrush brush(renderTarget, RGB(0xff, 0xff, 0xff));
-		renderTarget->DrawLine(CPoint(rcBase.left, rcBase.bottom), CPoint(rcBase.right, rcBase.bottom), &brush);
-
-		textFormat.Get()->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-		textFormat.Get()->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-		for (int i = 0; i < baseWidth / guageWidth + 1; i++)
-		{
-			double time = i / zoom;
-			int hour = (int)time / 60 / 60;
-			int min = (int)time / 60 % 60;
-			double sec = fmod(time, 60);
-
-			int mx = rcBase.left + i * guageWidth;
-			int my = rcBase.bottom - longGuageHeight;
-			int lx = mx;
-			int ly = rcBase.bottom;
-			renderTarget->DrawLine(CPoint(mx, my), CPoint(lx, ly), &brush);
-
-			CString text; text.Format(_T("%02d:%02d:%06.3f"), hour, min, sec);
-			CRect rcText(mx, rc.top, mx + guageWidth, my);
-			renderTarget->DrawText(text, rcText, &textBrush, &textFormat);
-//			renderTarget->DrawRectangle(rcText, &brush);
-
-			for (int j = 1; j < 10; j++)
-			{
-				int mx = rcBase.left + i * guageWidth + (guageWidth / 10 * j);
-				int my = rcBase.bottom - shortGuageHeight;
-				int lx = mx;
-				int ly = rcBase.bottom;
-				renderTarget->DrawLine(CPoint(mx, my), CPoint(lx, ly), &brush);
-			}
-		}
-	}
-
-	{
-		CRect rcBase = rc;
-		rcBase.right = rcBase.left + layerButtonWidth;
-		rcBase.top = rcBase.top + guageHeight;
-		int baseWidth = rcBase.Width();
-		int baseHeight = rcBase.Height();
-
-		CD2DSolidColorBrush fillBrush(renderTarget, RGB(0x44, 0x44, 0x44));
-		CD2DSolidColorBrush edgeBrush(renderTarget, RGB(0x99, 0x99, 0x99));
-
-		textFormat.Get()->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-		textFormat.Get()->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-		for (int i = 0; i < baseHeight / layerButtonHeight + 1; i++)
-		{
-			CRect rc;
-			rc.left = rcBase.left;
-			rc.right = rcBase.right;
-			rc.top = rcBase.top + i * layerButtonHeight;
-			rc.bottom = rc.top + layerButtonHeight;
-
-			renderTarget->FillRectangle(rc, &fillBrush);
-			renderTarget->DrawRectangle(rc, &edgeBrush);
-
-			CString text; text.Format(_T("Layer %02d"), i + 1);
-			renderTarget->DrawText(text, rc, &textBrush, &textFormat);
-		}
-	}
-
-	{
-		CRect rcBase = rc;
-		rcBase.left = rcBase.left + layerButtonWidth;
-		rcBase.top = rcBase.top + guageHeight;
-		int baseWidth = rcBase.Width();
-		int baseHeight = rcBase.Height();
-
-		CD2DSolidColorBrush brush(renderTarget, RGB(0x66, 0x66, 0x66));
-
-		for (int i = 1; i < baseHeight / layerButtonHeight + 1; i++)
-		{
-			int mx = rcBase.left;
-			int my = rcBase.top + i * layerButtonHeight;
-			int lx = rcBase.right;
-			int ly = my;
-			renderTarget->DrawLine(CPoint(mx, my), CPoint(lx, ly), &brush);
-		}
-	}
-
-	{
-		CRect rcBase = rc;
-		rcBase.right = rcBase.left + layerButtonWidth;
-		rcBase.bottom = rcBase.top + guageHeight;
-		int baseWidth = rcBase.Width();
-		int baseHeight = rcBase.Height();
-
-		CD2DSolidColorBrush fillBrush(renderTarget, RGB(0x99, 0x00, 0x00));
-		CD2DSolidColorBrush edgeBrush(renderTarget, RGB(0x99, 0x99, 0x99));
-
-		textFormat.Get()->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-		textFormat.Get()->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-		{
-			renderTarget->FillRectangle(rcBase, &fillBrush);
-			renderTarget->DrawRectangle(rcBase, &edgeBrush);
-
-			CString text; text.Format(_T("Root"));
-			renderTarget->DrawText(text, rcBase, &textBrush, &textFormat);
-		}
-	}
-
-	{
-		CRect rcBase = rc;
-		rcBase.left = rcBase.left + layerButtonWidth;
-		rcBase.top = rcBase.top + guageHeight;
-		rcBase.right = rcBase.left + guageWidth * 2;
-		rcBase.bottom = rcBase.top + layerButtonHeight;
-		int baseWidth = rcBase.Width();
-		int baseHeight = rcBase.Height();
-
-		CD2DSolidColorBrush fillBrush(renderTarget, RGB(0x00, 0x99, 0xff));
-		CD2DSolidColorBrush edgeBrush(renderTarget, RGB(0xff, 0xff, 0xff));
-
-		textFormat.Get()->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-		textFormat.Get()->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
-
-		{
-			renderTarget->FillRoundedRectangle(CD2DRoundedRect(rcBase, CSize(10, 10)), &fillBrush);
-			renderTarget->DrawRoundedRectangle(CD2DRoundedRect(rcBase, CSize(10, 10)), &edgeBrush);
-
-			CString text; text.Format(_T("描画のテスト"));
-			renderTarget->DrawText(text, rcBase, &textBrush, &textFormat);
-		}
-	}
-
-	renderTarget->PopLayer();
-
-	return TRUE;
+	CPaintDC dc(this);
 }
 
 LRESULT CMainFrame::OnAtlivuInputInited(WPARAM wParam, LPARAM lParam)

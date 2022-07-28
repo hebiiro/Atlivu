@@ -25,6 +25,12 @@ public:
 
 public:
 
+	HGLRC m_rc = 0;
+
+	BOOL setupPixelFormat(CDC& dc);
+
+public:
+
 	CMainFrame() noexcept;
 	virtual ~CMainFrame();
 
@@ -40,7 +46,7 @@ protected:
 
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnDestroy();
-	afx_msg LRESULT OnDraw2D(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnPaint();
 	afx_msg LRESULT OnAtlivuInputInited(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnAtlivuOutputInited(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnOpenMedia();

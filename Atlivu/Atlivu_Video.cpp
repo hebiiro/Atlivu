@@ -48,6 +48,13 @@ void CAtlivuApp::seek(int frame)
 {
 	MY_TRACE(_T("CAtlivuApp::seek(%d)\n"), frame);
 
+	if (!m_media)
+	{
+		AfxMessageBox(_T("メディアファイルが読み込まれていません"));
+
+		return;
+	}
+
 	m_isPlaying = FALSE;
 	m_isProcessing = FALSE;
 	m_startTime = 0;
@@ -63,6 +70,13 @@ void CAtlivuApp::seek(int frame)
 void CAtlivuApp::play()
 {
 	MY_TRACE(_T("CAtlivuApp::play()\n"));
+
+	if (!m_media)
+	{
+		AfxMessageBox(_T("メディアファイルが読み込まれていません"));
+
+		return;
+	}
 
 	m_mainFrame.m_view.m_play.SetWindowText(_T("停止"));
 

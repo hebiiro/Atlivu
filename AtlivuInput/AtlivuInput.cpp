@@ -19,6 +19,8 @@ END_MESSAGE_MAP()
 
 CAtlivuInputApp::CAtlivuInputApp() noexcept
 {
+	_tsetlocale(LC_CTYPE, _T(""));
+
 	trace_init(0, 0, TRUE);
 }
 

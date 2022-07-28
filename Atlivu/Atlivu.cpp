@@ -23,6 +23,7 @@ END_MESSAGE_MAP()
 
 CAtlivuApp::CAtlivuApp() noexcept
 {
+	_tsetlocale(LC_CTYPE, _T(""));
 }
 
 CAtlivuApp::~CAtlivuApp()

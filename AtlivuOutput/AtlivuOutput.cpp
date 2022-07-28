@@ -14,6 +14,8 @@ END_MESSAGE_MAP()
 
 CAtlivuOutputApp::CAtlivuOutputApp() noexcept
 {
+	_tsetlocale(LC_CTYPE, _T(""));
+
 	trace_init(0, 0, TRUE);
 }
 
@@ -135,7 +137,9 @@ BOOL CAtlivuOutputApp::save(LPCTSTR fileName, MediaInfo* mediaInfo)
 
 	OUTPUT_PLUGIN_TABLE* op = m_outputManager->getOutputPlugin();
 
-	_bstr_t fileName2 = fileName;
+	_bstr_t fileNameBSTR = fileName;
+
+	::MessageBoxA(0, fileNameBSTR, "AtlivuOutput", MB_OK);
 
 	OUTPUT_INFO oi = {};
 	oi.flag |= OUTPUT_INFO_FLAG_VIDEO;
@@ -148,7 +152,7 @@ BOOL CAtlivuOutputApp::save(LPCTSTR fileName, MediaInfo* mediaInfo)
 	oi.audio_rate = mediaInfo->audio_format.nSamplesPerSec;
 	oi.audio_ch = mediaInfo->audio_format.nChannels;
 	oi.audio_size = mediaInfo->audio_format.nChannels * mediaInfo->audio_format.wBitsPerSample / 8;
-	oi.savefile = fileName2;
+	oi.savefile = fileNameBSTR;
 	oi.func_get_video = func_get_video;
 	oi.func_get_audio = func_get_audio;
 	oi.func_is_abort = func_is_abort;

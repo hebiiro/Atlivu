@@ -22,6 +22,7 @@
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 
+#include <locale.h>
 #include <strsafe.h>
 
 #include <memory>
