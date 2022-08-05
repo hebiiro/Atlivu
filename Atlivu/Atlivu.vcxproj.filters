@@ -22,18 +22,16 @@
     <ClInclude Include="Resource.h">
       <Filter>リソース ファイル</Filter>
     </ClInclude>
-    <ClInclude Include="MainView.h" />
     <ClInclude Include="Atlivu.h" />
     <ClInclude Include="MainFrame.h" />
     <ClInclude Include="VideoProcessor.h" />
     <ClInclude Include="VideoProcessorWindow.h" />
-    <ClInclude Include="Common.h" />
+    <ClInclude Include="..\Common\auio.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
       <Filter>ベース</Filter>
     </ClCompile>
-    <ClCompile Include="MainView.cpp" />
     <ClCompile Include="MainFrame.cpp" />
     <ClCompile Include="Atlivu.cpp" />
     <ClCompile Include="VideoProcessor.cpp" />

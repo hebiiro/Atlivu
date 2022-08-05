@@ -12,8 +12,8 @@ BEGIN_MESSAGE_MAP(CMainFrame, CWnd)
 	ON_WM_CREATE()
 	ON_WM_DESTROY()
 	ON_WM_PAINT()
-	ON_MESSAGE(WM_ATLIVU_INPUT_INITED, OnAtlivuInputInited)
-	ON_MESSAGE(WM_ATLIVU_OUTPUT_INITED, OnAtlivuOutputInited)
+	ON_WM_SIZE()
+	ON_WM_HSCROLL()
 	ON_COMMAND(ID_OPEN_MEDIA, OnOpenMedia)
 	ON_COMMAND(ID_SAVE_MEDIA, OnSaveMedia)
 	ON_COMMAND(ID_ABORT_SAVE_MEDIA, OnAbortSaveMedia)
@@ -24,18 +24,10 @@ BEGIN_MESSAGE_MAP(CMainFrame, CWnd)
 	ON_MESSAGE(WM_VIDEO_PROCESSED_SEEK, OnVideoProcessedSeek)
 	ON_MESSAGE(WM_VIDEO_PROCESSED_PLAY, OnVideoProcessedPlay)
 	ON_MESSAGE(WM_VIDEO_PROCESSED_PLAY_STOP, OnVideoProcessedPlayStop)
-	ON_MESSAGE(WM_IS_ABORT, OnIsAbort)
-	ON_MESSAGE(WM_REST_TIME_DISP, OnRestTimeDisp)
-	ON_MESSAGE(WM_UPDATE_PREVIEW, OnUpdatePreview)
-	ON_MESSAGE(WM_GET_VIDEO, OnGetVideo)
-	ON_MESSAGE(WM_GET_AUDIO, OnGetAudio)
-	ON_MESSAGE(WM_SAVE_FILE_FINISHED, OnSaveFileFinished)
-	ON_MESSAGE(WM_CREATE_OUTPUT_VIDEO, OnCreateOutputVideo)
 END_MESSAGE_MAP()
 
 CMainFrame::CMainFrame() noexcept
 {
-	EnableD2DSupport();
 }
 
 CMainFrame::~CMainFrame()
@@ -84,9 +76,122 @@ BOOL CMainFrame::setupPixelFormat(CDC& dc)
 	return TRUE;
 }
 
+void CMainFrame::OnOpenMedia(MediaInfo* mediaInfo)
+{
+	MY_TRACE(_T("CMainFrame::OnOpenMedia()\n"));
+
+	{
+		// ビットマップを作成する。
+
+		m_pixelWidth = mediaInfo->format.biWidth;
+		m_pixelHeight = mediaInfo->format.biHeight;
+
+		CClientDC dc(this);
+		MakeCurrent makeCurrent(dc, m_rc);
+
+		glBindTexture(GL_TEXTURE_2D, m_videoTextureID);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_pixelWidth, m_pixelHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+		GLenum error = ::glGetError();
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	{
+		// コントロールの初期値を指定する。
+
+		m_seekBar.SetRange(0, mediaInfo->n - 1);
+//		m_seekBar.SetSelection(0, mediaInfo->n - 1);
+
+		m_seekBar.SetPos(0);
+		m_currentFrame.SetWindowText(_T("0"));
+	}
+
+	theApp.seek(0);
+}
+
+void CMainFrame::OnVideoProcessedSeek(CVideoProcessor* videoProcessor)
+{
+	MY_TRACE(_T("CMainFrame::OnVideoProcessedSeek()\n"));
+
+	MediaInfo* mi = &theApp.m_mediaInfo;
+	int frame = theApp.m_currentFrame;
+
+	{
+		CClientDC dc(this);
+		MakeCurrent makeCurrent(dc, m_rc);
+
+		{
+			// ビデオプロセッサの映像バッファをテクスチャに転送する。
+
+			glBindTexture(GL_TEXTURE_2D, m_videoTextureID);
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_pixelWidth, m_pixelHeight, GL_RGBA, GL_UNSIGNED_BYTE, videoProcessor->m_buffer.data());
+			GLenum error = ::glGetError();
+			glBindTexture(GL_TEXTURE_2D, 0);
+		}
+
+		{
+			// 音声波形のディスプレイリストを作成する。
+
+			int start = frame * mi->audio_format.nSamplesPerSec * mi->scale / mi->rate;
+			int length = mi->audio_format.nSamplesPerSec * mi->scale / mi->rate;
+
+			int BytesPerBlock = mi->audio_format.wBitsPerSample / 8 * mi->audio_format.nChannels;
+			int sampleCount = mi->audio_format.nAvgBytesPerSec / BytesPerBlock;
+
+			int32_t bufferLength = 0;
+			theApp.raw_readAudio(theApp.m_media, start, sampleCount, &bufferLength, m_audioBuffer);
+			short* buffer = (short*)m_audioBuffer.data();
+			m_audioWidth = min(length, bufferLength);
+
+			glNewList(m_audioDisplayList, GL_COMPILE);
+			glBegin(GL_LINE_STRIP);
+
+			if (mi->audio_format.nChannels == 2)
+			{
+				int div = 512;
+
+				for (int i = 0; i < m_audioWidth; i++)
+				{
+					float x = (float)(i);
+					float y = (float)((buffer[i * 2] + buffer[i * 2 + 1]) / div);
+					glVertex2f(x, y);
+				}
+			}
+
+			glEnd();
+			glEndList();
+		}
+	}
+
+	Invalidate(FALSE);
+	UpdateWindow();
+}
+
+void CMainFrame::OnVideoProcessedPlay(CVideoProcessor* videoProcessor)
+{
+	MY_TRACE(_T("CMainFrame::OnVideoProcessedPlay()\n"));
+
+	MediaInfo* mi = &theApp.m_mediaInfo;
+	int frame = theApp.m_currentFrame;
+
+	// コントロールを更新する。
+	m_seekBar.SetPos(frame);
+	CString text; text.Format(_T("%d"), frame);
+	m_currentFrame.SetWindowText(text);
+
+	// キャプションを更新する。
+	text.Format(_T("skip=%d"), theApp.m_totalSkipCount);
+	SetWindowText(text);
+
+	OnVideoProcessedSeek(videoProcessor);
+}
+
+//--------------------------------------------------------------------
+
 BOOL CMainFrame::Create()
 {
-	if (!CWnd::CreateEx(0, 0, 0, 0, CRect(0, 600, 800, 1000), 0, 0))
+	MY_TRACE(_T("CMainFrame::Create()\n"));
+
+	if (!CWnd::CreateEx(0, 0, 0, 0, CRect(0, 0, 1000, 800), 0, 0))
 		return FALSE;
 
 	return TRUE;
@@ -94,6 +199,8 @@ BOOL CMainFrame::Create()
 
 BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 {
+	MY_TRACE(_T("CMainFrame::PreCreateWindow()\n"));
+
 	WNDCLASS wc = {};
 	wc.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
 	wc.lpfnWndProc = AfxWndProc;
@@ -105,11 +212,8 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 	AfxRegisterClass(&wc);
 	cs.lpszName = _T("Atlivu.MainFrame");
 	cs.lpszClass = _T("Atlivu.MainFrame");
-//	cs.style = WS_POPUP | WS_SYSMENU | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-//	cs.style = WS_POPUP | WS_SYSMENU | WS_CAPTION | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 	cs.style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 	cs.dwExStyle = 0;
-//	cs.dwExStyle = WS_EX_TOOLWINDOW | WS_EX_NOPARENTNOTIFY;
 
 	CMenu menu; menu.LoadMenu(IDR_MAIN_VIEW);
 	cs.hMenu = menu.Detach();
@@ -117,12 +221,54 @@ BOOL CMainFrame::PreCreateWindow(CREATESTRUCT& cs)
 	return CWnd::PreCreateWindow(cs);
 }
 
+BOOL CMainFrame::OnCommand(WPARAM wParam, LPARAM lParam)
+{
+	HWND sender = (HWND)lParam;
+
+	if (sender == m_play.GetSafeHwnd())
+	{
+		MY_TRACE(_T("CMainFrame::OnCommand(m_play)\n"));
+
+		if (theApp.m_isPlaying)
+			theApp.stop();
+		else
+			theApp.play();
+	}
+
+	return CWnd::OnCommand(wParam, lParam);
+}
+
 int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	if (CWnd::OnCreate(lpCreateStruct) == -1)
 		return -1;
 
+	if (!theApp.createInputProcess())
+		return -1;
+
+	if (!theApp.createOutputProcess())
+		return -1;
+
 	{
+		// コントロールを作成する。
+
+		m_play.Create(_T("再生"), WS_VISIBLE | WS_CHILD, CRect(0, 0, 0, 0), this, 0);
+		m_currentFrame.Create(WS_VISIBLE | WS_CHILD, CRect(0, 0, 0, 0), this, 0);
+		m_currentFrame.ModifyStyleEx(0, WS_EX_CLIENTEDGE, SWP_FRAMECHANGED);
+		m_seekBar.Create(WS_VISIBLE | WS_CHILD | TBS_AUTOTICKS | TBS_ENABLESELRANGE, CRect(0, 0, 0, 0), this, 0);
+//		m_seekBar.SetTic(60);
+		m_seekBar.SetTicFreq(60);
+		m_seekBar.SetPageSize(60);
+
+		CFont font; font.CreateStockObject(DEFAULT_GUI_FONT);
+		m_play.SetFont(&font);
+		m_currentFrame.SetFont(&font);
+		m_seekBar.SetFont(&font);
+	}
+
+	{
+		// OpenGL を初期化する。
+
 		CClientDC dc(this);
 
 		setupPixelFormat(dc);
@@ -136,17 +282,28 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 			return -1;
 		}
+
+		MakeCurrent makeCurrent(dc, m_rc);
+
+		glGenTextures(1, &m_videoTextureID);
+
+		glBindTexture(GL_TEXTURE_2D, m_videoTextureID);
+
+		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+		// テクスチャを拡大縮小する時のフィルタリング方法を指定
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+		//ラッピング方法を指定
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+		// テクスチャのアンバインド
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		m_audioDisplayList = glGenLists(1);
 	}
-
-	if (!theApp.createInputProcess())
-		return -1;
-
-	if (!theApp.createOutputProcess())
-		return -1;
-
-	m_view.Create(this);
-	m_view.SetWindowPos(0, 0, 0, 1000, 600, SWP_NOZORDER | SWP_SHOWWINDOW);
-	m_view.UpdateWindow();
 
 	return 0;
 }
@@ -164,72 +321,170 @@ void CMainFrame::OnDestroy()
 void CMainFrame::OnPaint()
 {
 	CPaintDC dc(this);
+	MakeCurrent makeCurrent(dc, m_rc);
+
+	glClearColor(0.2f, 0.2f, 0.2f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	CRect rc; GetClientRect(&rc);
+	rc.bottom -= BUTTON_H;
+	int width = rc.Width();
+	int height = rc.Height();
+
+	glViewport(0, BUTTON_H, width, height + 1);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-0.5, width-0.5, height-0.5, -0.5, -1.0, 1.0);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	if (m_pixelWidth && m_pixelHeight)
+	{
+		// 映像を描画する。
+
+		CRect dstRect = rc;
+		dstRect.bottom -= WAVEFORM_H;
+		int x = dstRect.left;
+		int y = dstRect.top;
+		int w = dstRect.Width();
+		int h = dstRect.Height();
+		int w2 = h * m_pixelWidth / m_pixelHeight;
+		int h2 = w * m_pixelHeight / m_pixelWidth;
+
+		if (w2 > w) // srcSize の横幅が大きすぎるなら
+		{
+			// w はそのまま。top と bottom を調整する。
+
+			dstRect.top = (dstRect.top + dstRect.bottom - h2) / 2;
+			dstRect.bottom = dstRect.top + h2;
+		}
+		else // srcSize の縦幅が大きすぎるなら
+		{
+			// h はそのまま。left と right を調整する。
+
+			dstRect.left = (dstRect.left + dstRect.right - w2) / 2;
+			dstRect.right = dstRect.left + w2;
+		}
+
+		x = dstRect.left;
+		y = dstRect.top;
+		w = dstRect.Width();
+		h = dstRect.Height();
+
+		glBindTexture(GL_TEXTURE_2D, m_videoTextureID);
+		glEnable(GL_TEXTURE_2D);
+
+		glBegin(GL_QUADS);
+		glTexCoord2d(0.0, 0.0); glVertex2i(x, y);
+		glTexCoord2d(0.0, 1.0); glVertex2i(x, y + h);
+		glTexCoord2d(1.0, 1.0); glVertex2i(x + w, y + h);
+		glTexCoord2d(1.0, 0.0); glVertex2i(x + w, y);
+		glEnd();
+  
+		glDisable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, 0);
+	}
+
+	if (m_audioBuffer.data())
+	{
+		// 音声を描画する。
+
+		CRect dstRect = rc;
+		dstRect.top = rc.bottom - WAVEFORM_H;
+		int cy = (dstRect.top + dstRect.bottom) / 2;
+
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(1.5f);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+
+//		if (0)
+		{
+			glColor4ub(0xff, 0x00, 0x00, 128);
+			glBegin(GL_LINES);
+			glVertex2i(dstRect.left, cy);
+			glVertex2i(dstRect.right, cy);
+			glEnd();
+		}
+
+//		if (0)
+		{
+			float sx = (float)dstRect.Width() / (float)m_audioWidth;
+
+			glPushMatrix();
+
+			glScalef(sx, 1.0f, 1.0f);
+			glTranslatef(0.0f, (float)cy, 0.0f);
+
+			glColor4ub(0x00, 0xff, 0x00, 255);
+			glCallList(m_audioDisplayList);
+
+			glPopMatrix();
+		}
+
+		glDisable(GL_BLEND);
+		glDisable(GL_LINE_SMOOTH);
+	}
+
+	::SwapBuffers(dc);
 }
 
-LRESULT CMainFrame::OnAtlivuInputInited(WPARAM wParam, LPARAM lParam)
+void CMainFrame::OnSize(UINT nType, int cx, int cy)
 {
-	MY_TRACE(_T("CMainFrame::OnAtlivuInputInited()\n"));
+	CWnd::OnSize(nType, cx, cy);
 
-	theApp.m_inputWindow = (HWND)wParam;
+	// コントロールの位置を更新する。
 
-	CString iniPath = theApp.getIniPath();
+	CRect rc; GetClientRect(&rc);
 
 	{
-		TCHAR fileName[MAX_PATH] = {};
-		::GetPrivateProfileString(_T("config"), _T("inputPlugin"), _T(""), fileName, MAX_PATH, iniPath);
+		CRect rc2;
+		rc2.left = rc.right - BUTTON_W;
+		rc2.top = rc.bottom - BUTTON_H;
+		rc2.right = rc.right;
+		rc2.bottom = rc.bottom;
+		m_play.SetWindowPos(0, rc2.left, rc2.top, rc2.Width(), rc2.Height(), SWP_NOZORDER);
+	}
 
-		if (theApp.raw_loadInputPlugin(fileName))
+	{
+		CRect rc2;
+		rc2.left = rc.left;
+		rc2.top = rc.bottom - BUTTON_H;
+		rc2.right = rc.left + BUTTON_W;
+		rc2.bottom = rc.bottom;
+		m_currentFrame.SetWindowPos(0, rc2.left, rc2.top, rc2.Width(), rc2.Height(), SWP_NOZORDER);
+	}
+
+	{
+		CRect rc2;
+		rc2.left = rc.left + BUTTON_W;
+		rc2.top = rc.bottom - BUTTON_H;
+		rc2.right = rc.right - BUTTON_W;
+		rc2.bottom = rc.bottom;
+		m_seekBar.SetWindowPos(0, rc2.left, rc2.top, rc2.Width(), rc2.Height(), SWP_NOZORDER);
+	}
+}
+
+void CMainFrame::OnHScroll(UINT code, UINT pos, CScrollBar* scrollBar)
+{
+	switch (code)
+	{
+	case TB_ENDTRACK:
 		{
-			TCHAR fileName[MAX_PATH] = {};
-			::GetPrivateProfileString(_T("config"), _T("media"), _T(""), fileName, MAX_PATH, iniPath);
-
-			theApp.openMedia(fileName);
+			return;
 		}
 	}
 
-	return 0;
-}
+	// シークバーが変動したのでシークする。
 
-LRESULT CMainFrame::OnAtlivuOutputInited(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnAtlivuOutputInited()\n"));
+	int frame = m_seekBar.GetPos();
 
-	// 出力プロセスの初期化が終わったあとここにくる。
+	CString text; text.Format(_T("%d"), frame);
+	m_currentFrame.SetWindowText(text);
 
-	// ウィンドウハンドルを取得する。
-	theApp.m_outputWindow = (HWND)wParam;
+	theApp.seek(frame);
 
-	{
-		// パイプの接続を確認する。
-
-		BOOL result = ::ConnectNamedPipe(theApp.m_outputPipe, 0);
-		MY_TRACE_INT(result);
-		if (!result)
-		{
-			DWORD error = ::GetLastError();
-			MY_TRACE_HEX(error);
-			if (error == ERROR_PIPE_CONNECTED)
-			{
-				MY_TRACE(_T("パイプの接続は成功しています\n"));
-			}
-		}
-	}
-
-	CString iniPath = theApp.getIniPath();
-
-	{
-		// 前回使用していた出力プラグインを読み込む。
-
-		TCHAR fileName[MAX_PATH] = {};
-		::GetPrivateProfileString(_T("config"), _T("outputPlugin"), _T(""), fileName, MAX_PATH, iniPath);
-
-		theApp.raw_loadOutputPlugin(fileName);
-	}
-#if 0
-	// 起動してすぐ動画出力のテストをするなら
-	theApp.save(_T("C:\\Users\\main\\source\\repos\\Atlivu\\_bin\\test.mp4"));
-#endif
-	return 0;
+//	CWnd::OnHScroll(code, pos, scrollBar);
 }
 
 void CMainFrame::OnOpenMedia()
@@ -341,55 +596,6 @@ LRESULT CMainFrame::OnVideoProcessedPlayStop(WPARAM wParam, LPARAM lParam)
 	theApp.OnVideoProcessedPlayStop();
 
 	return 0;
-}
-
-LRESULT CMainFrame::OnIsAbort(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnIsAbort(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnIsAbort();
-}
-
-LRESULT CMainFrame::OnRestTimeDisp(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnRestTimeDisp(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnRestTimeDisp((int)wParam, (int)lParam);
-}
-
-LRESULT CMainFrame::OnUpdatePreview(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnUpdatePreview(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnUpdatePreview();
-}
-
-LRESULT CMainFrame::OnGetVideo(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnGetVideo(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnGetVideo();
-}
-
-LRESULT CMainFrame::OnGetAudio(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnGetAudio(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnGetAudio();
-}
-
-LRESULT CMainFrame::OnSaveFileFinished(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnSaveFileFinished(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnSaveFileFinished();
-}
-
-LRESULT CMainFrame::OnCreateOutputVideo(WPARAM wParam, LPARAM lParam)
-{
-	MY_TRACE(_T("CMainFrame::OnCreateOutputVideo(0x%08X, 0x%08X)\n"), wParam, lParam);
-
-	return theApp.OnCreateOutputVideo((int)wParam);
 }
 
 //--------------------------------------------------------------------

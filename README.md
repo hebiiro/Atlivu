@@ -14,8 +14,8 @@ https://docs.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist?view=msv
 1. 以下のファイルとフォルダを任意のフォルダに配置します。
 * 任意のフォルダ
 	* Atlivu.exe
-	* AtlivuInput.exe
-	* AtlivuOutput.exe
+	* aui.exe
+	* auo.exe
 	* Plugins
 		* lwinput.aui
 		* x264guiEx.auo
@@ -39,13 +39,135 @@ Plugins フォルダは AviUtl の Plugins フォルダをそのまま持って�
 
 ## 入力の流れ
 
-Atlivu.exe (64bit UNICODE) -> AtlivuInput.exe (32bit UNICODE) -> AviUtl 入力プラグイン (32bit)<br>
-プロセス間通信に WM_COPYDATA と ::ReadProcessMemory() を使用。<br>
+Atlivu.exe (64bit UNICODE) -> aui.exe (32bit UNICODE) -> AviUtl 入力プラグイン (32bit マルチバイト)<br>
+プロセス間通信にウィンドウメッセージと名前付きパイプを使用。<br>
+
+### 初期化
+
+1. 名前付きパイプ "\\\\.\\pipe\\aui%d" を作成する。"%d" はホスト側のスレッド ID。
+2. ホスト側のウィンドウハンドルを引数にして aui.exe を起動する。（例 : aui.exe 0x12345678)
+
+### 入力プラグインのロード
+
+1. aui.exe のスレッドに Input::CommandID::LoadPlugin をポストする。
+2. TCHAR[TextMaxSize] 型のファイル名をパイプに書き込む。
+3. int32_t 型の結果をパイプから読み込む。
+
+### 入力プラグインのアンロード
+
+1. aui.exe のスレッドに Input::CommandID::UnloadPlugin をポストする。
+2. int32_t 型の結果をパイプから読み込む。
+
+### 入力プラグインのコンフィグ
+
+1. aui.exe のスレッドに Input::CommandID::Config をポストする。
+2. int32_t 型の結果をパイプから読み込む。
+
+### メディアファイルのオープン
+
+1. aui.exe のスレッドに Input::CommandID::OpenMedia をポストする。
+2. TCHAR[TextMaxSize] 型のファイル名をパイプに書き込む。
+3. int32_t 型のメディアハンドルをパイプから読み込む。
+
+### メディアファイルのクローズ
+
+1. aui.exe のスレッドに Input::CommandID::CloseMedia をポストする。
+2. int32_t 型のメディアハンドルをパイプに書きこむ。
+3. int32_t 型の結果をパイプから読み込む。
+
+### メディア情報の取得
+
+1. aui.exe のスレッドに Input::CommandID::GetMediaInfo をポストする。
+2. int32_t 型のメディアハンドルをパイプに書きこむ。
+3. MediaInfo 型のメディア情報をパイプから読み込む。
+
+### 映像の取得
+
+1. aui.exe のスレッドに Input::CommandID::ReadVideo をポストする。
+2. int32_t 型のメディアハンドルをパイプに書きこむ。
+3. int32_t 型のフレーム番号をパイプに書きこむ。
+4. int32_t 型のバッファサイズをパイプから読み込む。
+5. BYTE[バッファサイズ] 型の映像バッファをパイプから読み込む。
+
+### 音声の取得
+
+1. aui.exe のスレッドに Input::CommandID::ReadAudio をポストする。
+2. int32_t 型のメディアハンドルをパイプに書きこむ。
+3. int32_t 型の開始サンプルをパイプに書きこむ。
+4. int32_t 型のサンプル数をパイプに書きこむ。
+5. int32_t 型の実際に読み込むサンプル数をパイプから読み込む。
+6. 実際に読み込むサンプル数からバッファサイズを算出する。
+7. BYTE[バッファサイズ] 型の音声バッファをパイプから読み込む。
 
 ## 出力の流れ
 
-Atlivu.exe (64bit UNICODE) -> AtlivuOutput.exe (32bit UNICODE) -> AviUtl 出力プラグイン (32bit)<br>
-プロセス間通信に名前付きパイプを使用。<br>
+Atlivu.exe (64bit UNICODE) -> auo.exe (32bit UNICODE) -> AviUtl 出力プラグイン (32bit マルチバイト)<br>
+プロセス間通信にウィンドウメッセージと名前付きパイプを使用。<br>
+
+### 初期化
+
+1. 名前付きパイプ "\\\\.\\pipe\\auo%d" を作成する。"%d" はホスト側のスレッド ID。
+2. ホスト側のウィンドウハンドルを引数にして auo.exe を起動する。（例 : auo.exe 0x12345678)
+
+### 出力プラグインのロード
+
+1. auo.exe のスレッドに Output::CommandID::LoadPlugin をポストする。
+2. TCHAR[TextMaxSize] 型のファイル名をパイプに書き込む。
+3. int32_t 型の結果をパイプから読み込む。
+
+### 出力プラグインのアンロード
+
+1. auo.exe のスレッドに Output::CommandID::UnloadPlugin をポストする。
+2. int32_t 型の結果をパイプから読み込む。
+
+### 出力プラグインのコンフィグ
+
+1. auo.exe のスレッドに Output::CommandID::Config をポストする。
+2. int32_t 型の結果をパイプから読み込む。
+
+### ファイルの保存 (エンコード)
+
+1. auo.exe のスレッドに Output::CommandID::SaveFile をポストする。
+2. TCHAR[TextMaxSize] 型のファイル名をパイプに書き込む。
+3. MediaInfo 型のメディア情報をパイプに書き込む。
+4. auo.exe 側からパイプデータが送られてくるのでそれを読み込む。
+
+### パイプデータの終了
+
+1. Output::CommandID::End を読み込む。
+2. パイプデータの読み込みを終了する。
+
+### 保存処理の中止
+
+1. Output::CommandID::IsAbort を読み込む。
+2. int32_t 型のデータをパイプに書きこむ。保存を中止するなら 0 以外を書きこむ。
+
+### 残り時間の表示
+
+1. Output::CommandID::RestTimeDisp を読み込む。
+2. int32_t 型の現在フレームをパイプから読み込む。
+3. int32_t 型のフレーム総数をパイプから読み込む。
+
+### プレビューの更新
+
+1. Output::CommandID::UpdatePreview を読み込む。
+2. 必要ならプレビューを更新する。
+
+### 映像バッファを渡す
+
+1. Output::CommandID::GetVideo を読み込む。
+2. int32_t 型のフレーム番号をパイプから読み込む。
+3. int32_t 型のフォーマットをパイプから読み込む。
+4. int32_t 型のバッファサイズをパイプに書き込む。
+5. BYTE[バッファサイズ] 型の映像バッファをパイプに書き込む。
+
+### 音声バッファを渡す
+
+1. Output::CommandID::GetAudio を読み込む。
+2. int32_t 型の開始サンプルをパイプから読み込む。
+3. int32_t 型のサンプル数をパイプから読み込む。
+4. int32_t 型のバッファサイズをパイプに書き込む。
+5. BYTE[バッファサイズ] 型の音声バッファをパイプに書き込む。
 
 ## シーク
 
@@ -56,30 +178,6 @@ Atlivu.exe (64bit UNICODE) -> AtlivuOutput.exe (32bit UNICODE) -> AviUtl 出力�
 
 * シーク処理に加えて音声を再生。WaveOut を使用。
 
-## Direct2D
-
-MFC がサポートしているが非常に使いづらい。OpenGL に切り替えたい。
-
-## プロセス間通信
-
-### WM_COPYDATA
-
-* ::SendMessage() 限定になるので場合によっては使いにくい。
-
-### ::ReadProcessMemory() / ::WriteProcessMemory()
-
-* 32bit から 64bit のメモリは参照できないので使えない。
-* 64bit から 32bit のメモリなら問題なく参照したり書き換えたりできるが、セキュリティソフトにウィルス扱いされそう。
-
-### 共有メモリ
-
-* 後から大きさを変更するのが難しい。
-* 関数の引数のような小さなデータをやり取りするのには向いていない。
-
-### 名前付きパイプ
-
-* 使い方にクセがあるが、今のところ使用不可能な場面がなくどこでも使えそう。
-
 ## 未解決
 
 * プラグインの設定ウィンドウが後ろに行ってしまう。
@@ -88,16 +186,16 @@ MFC がサポートしているが非常に使いづらい。OpenGL に切り替
 ## 予定
 
 * 32bit 版と 64bit 版の入出力インターフェイスを定義する。
-	* 当面は 32bit 版インターフェイスで AtlivuInput.exe と AtlivuOutput.exe を使用する。
+	* 当面は 32bit 版インターフェイスで aui.exe と auo.exe を使用する。
 	* 入出力プラグイン製作者の方が 64bit 版インターフェイスに対応してくれたらそれを直接使用する。<br>
 	これにより入出力プラグイン側のメモリ空間が 64bit に拡張され、エンコードの安定性が増す。<br>
 	さらにプロセス間通信のオーバーヘッドがなくなって処理速度が多少向上する。(AviUtl と同等にまで戻る)<br>
 * サブプロセスの exe ファイルはユーザーが誤って実行しないように拡張子を変えたほうがいいかもしれない。
 * タイムラインの UI 制作をやってみたい。
-* 描画を OpenGL にする。
 
 ## 更新履歴
 
+* 2.0.0 - 2022/08/06 入出力を整理
 * 1.0.1 - 2022/07/28 ロケールを設定するように修正
 * 1.0.0 - 2022/07/16 入力プラグインと出力プラグインが使えるかテスト
 

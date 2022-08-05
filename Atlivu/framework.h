@@ -34,7 +34,7 @@ using namespace Gdiplus;
 
 #include "Common/Tracer.h"
 #include "Common/WinUtility.h"
-#include "../Atlivu/Common.h"
+#include "../Common/auio.h"
 
 #ifdef _UNICODE
 #if defined _M_IX86

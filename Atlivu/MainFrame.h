@@ -1,12 +1,23 @@
 ﻿#pragma once
 
-#include "MainView.h"
+#include "VideoProcessor.h"
 
 //--------------------------------------------------------------------
 
-typedef std::shared_ptr<CD2DTextFormat> CD2DTextFormatPtr;
-typedef std::shared_ptr<CD2DSolidColorBrush> CD2DSolidColorBrushPtr;
-typedef std::shared_ptr<CD2DLinearGradientBrush> CD2DLinearGradientBrushPtr;
+class MakeCurrent
+{
+public:
+
+	MakeCurrent(HDC dc, HGLRC rc)
+	{
+		::wglMakeCurrent(dc, rc);
+	}
+
+	~MakeCurrent()
+	{
+		::wglMakeCurrent(0, 0);
+	}
+};
 
 //--------------------------------------------------------------------
 
@@ -14,41 +25,45 @@ class CMainFrame : public CWnd
 {
 public:
 
-	int m_headingWidth;
-	int m_headingHeight;
-	int m_shortGuageHeight;
-	int m_longGuageHeight;
-	int m_zoom;
-	int m_layerHeight;
+	static const int BUTTON_W = 60;
+	static const int BUTTON_H = 30;
+	static const int WAVEFORM_H = 80;
 
-	CMainView m_view;
+	CButton m_play;
+	CEdit m_currentFrame;
+	CSliderCtrl m_seekBar;
 
-public:
+	std::vector<BYTE> m_audioBuffer;
+	int m_audioWidth = 0;
 
 	HGLRC m_rc = 0;
-
-	BOOL setupPixelFormat(CDC& dc);
+	GLuint m_videoTextureID = 0;
+	GLuint m_audioDisplayList = 0;
+	int m_pixelWidth = 0;
+	int m_pixelHeight = 0;
 
 public:
 
 	CMainFrame() noexcept;
 	virtual ~CMainFrame();
 
-	HANDLE getRetValue()
-	{
-		return ::GetProp(GetSafeHwnd(), PROP_NAME_RET_VALUE);
-	}
+	BOOL setupPixelFormat(CDC& dc);
+
+	void OnOpenMedia(MediaInfo* mediaInfo);
+	void OnVideoProcessedSeek(CVideoProcessor* videoProcessor);
+	void OnVideoProcessedPlay(CVideoProcessor* videoProcessor);
 
 	virtual BOOL Create();
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
+	virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam);
 
 protected:
 
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnDestroy();
 	afx_msg void OnPaint();
-	afx_msg LRESULT OnAtlivuInputInited(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnAtlivuOutputInited(WPARAM wParam, LPARAM lParam);
+	afx_msg void OnSize(UINT nType, int cx, int cy);
+	afx_msg void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar* pScrollBar);
 	afx_msg void OnOpenMedia();
 	afx_msg void OnSaveMedia();
 	afx_msg void OnAbortSaveMedia();
@@ -59,13 +74,6 @@ protected:
 	afx_msg LRESULT OnVideoProcessedSeek(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnVideoProcessedPlay(WPARAM wParam, LPARAM lParam);
 	afx_msg LRESULT OnVideoProcessedPlayStop(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnIsAbort(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnRestTimeDisp(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnUpdatePreview(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnGetVideo(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnGetAudio(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnSaveFileFinished(WPARAM wParam, LPARAM lParam);
-	afx_msg LRESULT OnCreateOutputVideo(WPARAM wParam, LPARAM lParam);
 	DECLARE_MESSAGE_MAP()
 };
 

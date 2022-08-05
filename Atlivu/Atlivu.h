@@ -6,6 +6,14 @@
 
 //--------------------------------------------------------------------
 
+static const UINT WM_VIDEO_PROCESS_SEEK			= WM_APP + 120;
+static const UINT WM_VIDEO_PROCESSED_SEEK		= WM_APP + 121;
+static const UINT WM_VIDEO_PROCESS_PLAY			= WM_APP + 122;
+static const UINT WM_VIDEO_PROCESSED_PLAY		= WM_APP + 123;
+static const UINT WM_VIDEO_PROCESSED_PLAY_STOP	= WM_APP + 125;
+
+//--------------------------------------------------------------------
+
 typedef std::shared_ptr<CVideoProcessor> CVideoProcessorPtr;
 typedef std::vector<CVideoProcessorPtr> CVideoProcessorArray;
 
@@ -21,20 +29,19 @@ public:
 	ULONG_PTR m_gdiHookToken = 0;
 
 	PROCESS_INFORMATION m_inputPi = {};
-	HWND m_inputWindow = 0;
 	HANDLE m_inputPipe = 0;
 
 	PROCESS_INFORMATION m_outputPi = {};
-	HWND m_outputWindow = 0;
 	HANDLE m_outputPipe = 0;
 
 	int32_t m_media = 0;
 	MediaInfo m_mediaInfo = {};
 
 	CMainFrame m_mainFrame;
+	CCriticalSection m_csMedia;
 
 	BOOL m_isPlaying = FALSE;
-	BOOL m_isProcessing = FALSE;
+	BOOL m_isSubThreadProcessing = FALSE;
 	DWORD m_startTime = 0;
 	LONG m_startFrame = 0;
 	LONG m_endFrame = 0;
@@ -63,6 +70,10 @@ public:
 
 	BOOL createInputProcess();
 	BOOL createOutputProcess();
+	BOOL initInputPlugin();
+	BOOL termInputPlugin();
+	BOOL initOutputPlugin();
+	BOOL termOutputPlugin();
 	BOOL openMedia(LPCTSTR fileName);
 	BOOL closeMedia();
 	BOOL raw_loadInputPlugin(LPCTSTR fileName);
@@ -72,41 +83,11 @@ public:
 	BOOL raw_closeMedia(int32_t media);
 	BOOL raw_getMediaInfo(int32_t media, MediaInfo* mediaInfo);
 	BOOL raw_readVideo(int32_t media, int32_t frame, std::vector<BYTE>& output);
-	BOOL raw_readAudio(int32_t media, int32_t start, int32_t length, std::vector<BYTE>& output);
+	BOOL raw_readAudio(int32_t media, int32_t start, int32_t length, int32_t* bufferLength, std::vector<BYTE>& output);
 	BOOL raw_loadOutputPlugin(LPCTSTR fileName);
 	BOOL raw_unloadOutputPlugin();
 	BOOL raw_configOutputPlugin();
 	BOOL raw_saveFile(LPCTSTR fileName);
-
-	LRESULT sendInputMessage(UINT message, WPARAM wParam, LPARAM lParam)
-	{
-		return ::SendMessage(m_inputWindow, message, wParam, lParam);
-	}
-
-	BOOL postInputMessage(UINT message, WPARAM wParam, LPARAM lParam)
-	{
-		return ::PostMessage(m_inputWindow, message, wParam, lParam);
-	}
-
-	LRESULT sendOutputMessage(UINT message, WPARAM wParam, LPARAM lParam)
-	{
-		return ::SendMessage(m_outputWindow, message, wParam, lParam);
-	}
-
-	BOOL postOutputMessage(UINT message, WPARAM wParam, LPARAM lParam)
-	{
-		return ::PostMessage(m_outputWindow, message, wParam, lParam);
-	}
-
-	BOOL readInputProcessMemory(void* address, void* buffer, SIZE_T bufferSize)
-	{
-		return ::ReadProcessMemory(m_inputPi.hProcess, address, buffer, bufferSize, 0);
-	}
-
-	BOOL writeInputProcessMemory(void* address, void* buffer, SIZE_T bufferSize)
-	{
-		return ::WriteProcessMemory(m_inputPi.hProcess, address, buffer, bufferSize, 0);
-	}
 
 	CString getIniPath()
 	{
@@ -152,12 +133,14 @@ public:
 
 	BOOL save(LPCTSTR fileName);
 	BOOL abort();
+	UINT outputPipeLoop(LPVOID param);
+	UINT OnOutputThreadProc(LPVOID param);
+	static UINT outputThreadProc(LPVOID param);
 	BOOL OnIsAbort();
 	BOOL OnRestTimeDisp(int now, int total);
 	BOOL OnUpdatePreview();
-	BOOL OnGetVideo();
-	BOOL OnGetAudio();
-	BOOL OnSaveFileFinished();
+	BOOL OnGetVideo(int32_t frame, DWORD format);
+	BOOL OnGetAudio(int32_t start, int32_t length);
 	BOOL OnCreateOutputVideo(int frame);
 
 	virtual BOOL InitInstance();

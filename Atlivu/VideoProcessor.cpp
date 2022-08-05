@@ -31,16 +31,15 @@ void CVideoProcessor::getBuffer()
 {
 	// RGB ビデオバッファを作成する。
 
-	ReadVideoOutput* output = (ReadVideoOutput*)m_rawBuffer.data();
 	m_buffer.resize(theApp.getRGBBufferSize());
-	theApp.getRGBBuffer(output->buffer, m_buffer.data());
+	theApp.getRGBBuffer(m_rawBuffer.data(), m_buffer.data());
 }
 
 LRESULT CVideoProcessor::OnVideoProcessSeek(WPARAM wParam, LPARAM lParam)
 {
 	MY_TRACE(_T("CVideoProcessor::OnVideoProcessSeek(0x%08X, 0x%08X)\n"), wParam, lParam);
 
-	m_isLocked = FALSE;
+	m_isSeeking = FALSE;
 
 	getRawBuffer();
 	getBuffer();
@@ -54,7 +53,7 @@ LRESULT CVideoProcessor::OnVideoProcessPlay(WPARAM wParam, LPARAM lParam)
 {
 	MY_TRACE(_T("CVideoProcessor::OnVideoProcessPlay(0x%08X, 0x%08X)\n"), wParam, lParam);
 
-	theApp.m_isProcessing = FALSE;
+	theApp.m_isSubThreadProcessing = FALSE;
 
 	if (!theApp.m_isPlaying)
 		return 0;

@@ -20,10 +20,10 @@ inline BYTE* YUV2ToRGB_BT601_32bit_16bit(BYTE* dst, BYTE Y, BYTE U, BYTE V)
 	int D = U - 128;
 	int E = V - 128;
 
-	dst[3] = 0xff;
-	dst[2] = clip((76309 * C              + 104597 * E + 32768) >> 16);
+	dst[0] = clip((76309 * C              + 104597 * E + 32768) >> 16);
 	dst[1] = clip((76309 * C -  25675 * D -  53279 * E + 32768) >> 16);
-	dst[0] = clip((76309 * C + 132201 * D              + 32768) >> 16);
+	dst[2] = clip((76309 * C + 132201 * D              + 32768) >> 16);
+	dst[3] = 0xff;
 
 	return dst + 4;
 }
@@ -34,10 +34,10 @@ inline BYTE* YUV2ToRGB_BT601_32bit_8bit(BYTE* dst, BYTE Y, BYTE U, BYTE V)
 	int D = U - 128;
 	int E = V - 128;
 
-	dst[3] = 0xff;
-	dst[2] = clip((298 * C           + 409 * E + 128) >> 8);
+	dst[0] = clip((298 * C           + 409 * E + 128) >> 8);
 	dst[1] = clip((298 * C - 100 * D - 208 * E + 128) >> 8);
-	dst[0] = clip((298 * C + 516 * D           + 128) >> 8);
+	dst[2] = clip((298 * C + 516 * D           + 128) >> 8);
+	dst[3] = 0xff;
 
 	return dst + 4;
 }
@@ -56,14 +56,14 @@ void CAtlivuApp::seek(int frame)
 	}
 
 	m_isPlaying = FALSE;
-	m_isProcessing = FALSE;
+	m_isSubThreadProcessing = FALSE;
 	m_startTime = 0;
 	m_startFrame = frame;
 	m_endFrame = frame + 1;
 	m_currentFrame = m_startFrame;
 	m_totalSkipCount = 0;
-	if (m_videoProcessor->m_isLocked) return;
-	m_videoProcessor->m_isLocked = TRUE;
+	if (m_videoProcessor->m_isSeeking) return;
+	m_videoProcessor->m_isSeeking = TRUE;
 	m_videoProcessor->postMessage(WM_VIDEO_PROCESS_SEEK, 0, 0);
 }
 
@@ -78,12 +78,12 @@ void CAtlivuApp::play()
 		return;
 	}
 
-	m_mainFrame.m_view.m_play.SetWindowText(_T("停止"));
+	m_mainFrame.m_play.SetWindowText(_T("停止"));
 
 	m_isPlaying = TRUE;
-	m_isProcessing = FALSE;
+	m_isSubThreadProcessing = FALSE;
 	m_startTime = ::timeGetTime();
-	m_startFrame = m_mainFrame.m_view.m_seekBar.GetPos();
+	m_startFrame = m_mainFrame.m_seekBar.GetPos();
 	m_endFrame = m_mediaInfo.n;
 	m_currentFrame = m_startFrame;
 	m_totalSkipCount = 0;
@@ -107,8 +107,8 @@ void CAtlivuApp::stop()
 	m_isPlaying = FALSE;
 	m_videoProcessor->sendMessage(WM_NULL, 0, 0);
 
-	if (m_mainFrame.m_view.m_play.GetSafeHwnd())
-		m_mainFrame.m_view.m_play.SetWindowText(_T("再生"));
+	if (m_mainFrame.m_play.GetSafeHwnd())
+		m_mainFrame.m_play.SetWindowText(_T("再生"));
 }
 
 LONG CAtlivuApp::frameToTime(LONG frame)
@@ -180,11 +180,11 @@ void CAtlivuApp::getYUY2Buffer(BYTE* src, BYTE* dst)
 
 		for (int x = 0; x < w; x+= 2)
 		{
-			dst[0] = clip((16843 * src[2] + 33030 * src[1] +  6423 * src[0] + 1048576 + 32768) >> 16);
-			dst[1] = clip((-9699 * src[2] - 19071 * src[1] + 28770 * src[0] + 8388608 + 32768) >> 16);
-			dst[3] = clip((28770 * src[2] - 24117 * src[1] -  4653 * src[0] + 8388608 + 32768) >> 16);
+			dst[0] = clip((16843 * src[0] + 33030 * src[1] +  6423 * src[2] + 1048576 + 32768) >> 16);
+			dst[1] = clip((-9699 * src[0] - 19071 * src[1] + 28770 * src[2] + 8388608 + 32768) >> 16);
+			dst[3] = clip((28770 * src[0] - 24117 * src[1] -  4653 * src[2] + 8388608 + 32768) >> 16);
 			src += 4;
-			dst[2] = clip((16843 * src[2] + 33030 * src[1] +  6423 * src[0] + 1048576 + 32768) >> 16);
+			dst[2] = clip((16843 * src[0] + 33030 * src[1] +  6423 * src[2] + 1048576 + 32768) >> 16);
 			src += 4;
 			dst += 4;
 		}
@@ -195,7 +195,7 @@ void CAtlivuApp::OnVideoProcessedSeek(CVideoProcessor* videoProcessor)
 {
 	MY_TRACE(_T("CAtlivuApp::OnVideoProcessedSeek()\n"));
 
-	m_mainFrame.m_view.OnVideoProcessedSeek(videoProcessor);
+	m_mainFrame.OnVideoProcessedSeek(videoProcessor);
 }
 
 void CAtlivuApp::OnVideoProcessedPlay(CVideoProcessor* videoProcessor)
@@ -207,7 +207,7 @@ void CAtlivuApp::OnVideoProcessedPlay(CVideoProcessor* videoProcessor)
 
 	MY_TRACE(_T("%d をレンダリングします\n"), m_currentFrame);
 
-	m_mainFrame.m_view.OnVideoProcessedPlay(videoProcessor);
+	m_mainFrame.OnVideoProcessedPlay(videoProcessor);
 }
 
 void CAtlivuApp::OnVideoProcessedPlayStop()
@@ -220,10 +220,6 @@ void CAtlivuApp::OnVideoProcessedPlayStop()
 void CAtlivuApp::OnVideoTimerProc(UINT timerId)
 {
 	if (m_videoTimerId != timerId)
-		return;
-
-	// カレントフレームが範囲外なら
-	if (m_currentFrame >= m_endFrame)
 		return;
 
 	LONG currentTime = ::timeGetTime() - m_startTime;
@@ -246,14 +242,14 @@ void CAtlivuApp::OnVideoTimerProc(UINT timerId)
 	}
 
 	// まだサブスレッドが処理中なら
-	if (m_isProcessing)
+	if (m_isSubThreadProcessing)
 	{
 		m_totalSkipCount += incFrame;
 		return;
 	}
 
 	// 処理中フラグを立てる。
-	m_isProcessing = TRUE;
+	m_isSubThreadProcessing = TRUE;
 
 	// 処理を開始する。
 	m_videoProcessor->postMessage(WM_VIDEO_PROCESS_PLAY, 0, 0);

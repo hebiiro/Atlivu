@@ -100,16 +100,16 @@ void CAtlivuApp::audioWrite(WAVEHDR& waveHeader)
 	int sampleByteCount = wf->wBitsPerSample / 8 * wf->nChannels;
 	int sampleCount = wf->nAvgBytesPerSec / sampleByteCount;
 
+	int32_t rawBufferLength = 0;
 	std::vector<BYTE> rawBuffer;
-	if (!raw_readAudio(m_media, m_waveCurrentSample, sampleCount, rawBuffer))
+	if (!raw_readAudio(m_media, m_waveCurrentSample, sampleCount, &rawBufferLength, rawBuffer))
 	{
 		m_waveCurrentSample = -1;
 		return;
 	}
-	ReadAudioOutput* output = (ReadAudioOutput*)rawBuffer.data();
-	sampleCount = output->length;
+	sampleCount = rawBufferLength;
 	waveHeader.dwBufferLength = sampleCount * sampleByteCount;
-	memcpy(waveHeader.lpData, output->buffer, waveHeader.dwBufferLength);
+	memcpy(waveHeader.lpData, rawBuffer.data(), waveHeader.dwBufferLength);
 	::waveOutWrite(m_waveOut, &waveHeader, sizeof(WAVEHDR));
 
 	if (waveHeader.dwBufferLength == wf->nAvgBytesPerSec)

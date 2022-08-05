@@ -11,7 +11,7 @@ public:
 
 	CVideoProcessorWindow m_mainFrame;
 
-	BOOL m_isLocked = FALSE;
+	BOOL m_isSeeking = FALSE;
 	std::vector<BYTE> m_rawBuffer;
 	std::vector<BYTE> m_buffer;
 

@@ -211,11 +211,10 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\Common\auio.h" />
     <ClInclude Include="Atlivu.h" />
-    <ClInclude Include="Common.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrame.h" />
-    <ClInclude Include="MainView.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
@@ -229,7 +228,6 @@
     <ClCompile Include="Atlivu_Save.cpp" />
     <ClCompile Include="Atlivu_Video.cpp" />
     <ClCompile Include="MainFrame.cpp" />
-    <ClCompile Include="MainView.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -252,11 +250,11 @@
     <None Include="res\Atlivu.rc2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\AtlivuInput\AtlivuInput.vcxproj">
-      <Project>{a90605cc-6e41-460a-a900-a31f73197df0}</Project>
+    <ProjectReference Include="..\aui\aui.vcxproj">
+      <Project>{426e4a60-3789-4643-bb0c-e79ac1aff6da}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\AtlivuOutput\AtlivuOutput.vcxproj">
-      <Project>{42bca288-18b6-4305-8fe3-a3b406f69eb6}</Project>
+    <ProjectReference Include="..\auo\auo.vcxproj">
+      <Project>{e4408041-d01b-4b40-96ba-14dd23919856}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
